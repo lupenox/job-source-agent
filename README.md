@@ -1,18 +1,21 @@
-# AI Job Source Agent (Part 2 - Jobnova Take-Home)
+# AI Job Source Agent – Part 2 Take-Home Challenge
 
-Production-ready implementation of the **AI Job Source agent** for the Jobnova AI Engineer take-home challenge.
+Hey! This is my implementation of the **AI Job Source agent** for Jobnova’s take-home challenge.
 
-## Features
-- Starts from **LinkedIn company page** (or direct company name + website)
-- Uses reliable third-party LinkedIn data (Apify) to bypass LinkedIn blocking
-- Intelligent web agent finds career page → extracts one open position URL
-- Clean output in the exact format requested by the challenge
-- Mock mode for testing without spending API credits
-- Solid validation + scoring logic
+The goal was to build an agent that can start from a LinkedIn company page and automatically discover a company’s career page + one open job posting.
+
+## What It Does
+
+1. Takes a LinkedIn company URL (or company name + website)
+2. Extracts the official company website using a third-party LinkedIn enrichment API
+3. Intelligently finds the most relevant career/jobs page on the company website
+4. Pulls one open position URL from the career page
+5. Returns everything in a clean, structured format
+
+The agent includes fallback logic, domain validation, and scoring so it works reasonably well even on messy company sites.
 
 ## Quick Start
 
-### 1. Setup
 ```bash
 git clone https://github.com/lupenox/job-source-agent.git
 cd job-source-agent
@@ -23,16 +26,16 @@ playwright install chromium
 cp .env.example .env
 ```
 
-### 2. Get Apify Token (Recommended)
-1. Go to https://apify.com and sign up (free)
-2. Go to Settings → API tokens → Create new token
-3. Paste it into `.env` as `APIFY_API_TOKEN=...`
+### Get an Apify Token (Recommended)
 
-You get starter credits — enough for many demo runs.
+1. Sign up at [apify.com](https://apify.com) (free tier is enough)
+2. Go to Settings → API tokens and create one
+3. Add it to your `.env` file as `APIFY_API_TOKEN=...`
 
-### 3. Run the Agent
+### Run It
 
-**From LinkedIn (recommended for the challenge):**
+**Using LinkedIn (recommended):**
+
 ```bash
 python main.py --linkedin-url "https://www.linkedin.com/company/stripe" --mock
 ```
@@ -40,32 +43,59 @@ python main.py --linkedin-url "https://www.linkedin.com/company/stripe" --mock
 Remove `--mock` once you have a real token.
 
 **Direct mode (for testing):**
+
 ```bash
-python main.py --company-name "Stripe" --company-url "https://stripe.com"
+python main.py --company-name "OpenAI" --company-url "https://openai.com"
 ```
 
-### Output Example
+## Key Features
+
+- Starts from LinkedIn (bypasses direct LinkedIn scraping issues)
+- Uses Apify for reliable company data extraction
+- Smart career page detection with scoring + validation
+- Common path fallbacks (`/careers`, `/jobs`, etc.)
+- Clean separation of concerns (crawler, validator, scoring, agent)
+- Full test suite (16 tests passing)
+- Mock mode for easy development and demo recording
+
+## Project Structure
+
 ```
-======================================================================
-AI JOB SOURCE AGENT - FINAL RESULT (Challenge Format)
-======================================================================
-Company Name       : Stripe
-Career Page URL    : https://stripe.com/jobs
-Open Position URL  : https://stripe.com/jobs/software-engineer-backend
-======================================================================
+job-source-agent/
+├── main.py                 # CLI entrypoint
+├── src/
+│   ├── agent.py            # Main orchestration logic
+│   ├── crawler.py          # Playwright-based link extraction
+│   ├── linkedin_parser.py  # Apify integration + mock mode
+│   ├── validator.py        # Domain & ATS validation
+│   ├── scoring.py          # Keyword-based link scoring
+│   ├── schemas.py          # Data models
+└── tests/                  # Pytest suite (16 tests)
 ```
 
-## Architecture
-- `main.py` — CLI entrypoint + LinkedIn ingestion
-- `src/linkedin_parser.py` — Apify integration (with mock fallback)
-- `src/agent.py` — Orchestrates career page + job discovery
-- `src/crawler.py` — Playwright-based link extractor
-- `src/validator.py` + `src/scoring.py` — Smart filtering
+## Testing
 
-## Tips for Strong Demo Video
-- Use `--mock` first to show the full happy path quickly
-- Then run with real token on a real company
-- Show both the clean challenge-format output and the rich JSON with evidence
-- Mention that the LinkedIn step uses a compliant third-party API to avoid blocks
+All core logic is covered by tests:
 
-Good luck with the application! This should be a very solid submission for Part 2.
+```bash
+pytest tests/ -v
+```
+
+Currently **16/16 tests passing**.
+
+## Why I Built It This Way
+
+- Used a third-party LinkedIn API instead of trying to scrape LinkedIn directly (more reliable + avoids blocks)
+- Kept the web crawling logic simple but added validation and scoring so it’s not too brittle
+- Added mock mode so I could develop and record demos without burning API credits
+- Wrote tests early so I could refactor confidently
+
+## Future Improvements (If I Had More Time)
+
+- Add LLM-based link ranking instead of pure keyword scoring
+- Support more LinkedIn input types (job listing pages directly)
+- Better error messages and retry logic on flaky company sites
+
+---
+
+Thanks for checking it out! This was a fun challenge and I learned a lot building it.
