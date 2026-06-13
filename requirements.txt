@@ -4,3 +4,5 @@ python-dotenv
 pydantic
 requests
 apify-client
+pytest
+pytest-asyncio
