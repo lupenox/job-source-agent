@@ -1,5 +1,6 @@
 import pytest
-from src.linkedin_parser import LinkedInCrawlerApi, LinkedInApiResult
+import os
+from src.linkedin_parser import LinkedInCrawlerApi
 
 
 def test_mock_mode_returns_success_for_stripe():
@@ -27,18 +28,13 @@ def test_mock_mode_generic_fallback():
     assert result.company_name == "Example Corp"
 
 
-def test_not_configured_when_no_token_and_not_mock():
-    # Temporarily clear token
-    import os
-    original = os.environ.get("APIFY_API_TOKEN")
-    if "APIFY_API_TOKEN" in os.environ:
-        del os.environ["APIFY_API_TOKEN"]
-
+def test_returns_not_configured_when_no_token():
+    """Test that the parser reports not_configured when no token is available."""
+    # Create instance without mock, and force no token
     api = LinkedInCrawlerApi(use_mock=False)
+    api.apify_token = None          # Force no token for test
+    api.use_mock = False
+
     result = api.fetch_company_info("https://www.linkedin.com/company/stripe")
 
     assert result.status == "not_configured"
-
-    # Restore
-    if original:
-        os.environ["APIFY_API_TOKEN"] = original

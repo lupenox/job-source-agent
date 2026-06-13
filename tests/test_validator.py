@@ -10,6 +10,7 @@ from src.validator import (
 def test_get_domain():
     assert get_domain("https://www.stripe.com/jobs") == "stripe.com"
     assert get_domain("https://careers.openai.com") == "openai.com"
+    assert get_domain("https://jobs.lever.co/stripe/123") == "lever.co"
 
 
 def test_normalize_company_name():

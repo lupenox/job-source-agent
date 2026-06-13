@@ -34,12 +34,17 @@ def normalize_company_name(company_name: str) -> str:
 
 def get_domain(url: str) -> str:
     """
-    Extract normalized domain from a URL.
+    Extract normalized base domain from a URL (strips subdomains).
 
-    Example:
+    Examples:
     "https://www.stripe.com/jobs" -> "stripe.com"
+    "https://careers.openai.com" -> "openai.com"
     """
-    return urlparse(url).netloc.lower().replace("www.", "")
+    netloc = urlparse(url).netloc.lower().replace("www.", "")
+    parts = netloc.split(".")
+    if len(parts) >= 2:
+        return ".".join(parts[-2:])  # careers.openai.com -> openai.com
+    return netloc
 
 
 def domain_contains(candidate_url: str, expected_url: str) -> bool:
@@ -73,7 +78,6 @@ def validate_job_url(
     company_name: str,
     company_website_url: str,
 ) -> ValidationResult:
-    """
     url_lower = url.lower()
     candidate_domain = get_domain(url)
     company_slug = normalize_company_name(company_name)
