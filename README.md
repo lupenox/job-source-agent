@@ -2,15 +2,16 @@
 
 Hey! This is my implementation of the **AI Job Source agent** for Jobnova’s take-home challenge.
 
-The goal was to build an agent that can start from a LinkedIn company page and automatically discover a company’s career page + one open job posting.
+The goal was to build an agent that can start from a **LinkedIn job listing page** (or company page), extract the company’s official website, find their career page, and return one open job posting.
 
 ## What It Does
 
-1. Takes a LinkedIn company URL (or company name + website)
-2. Extracts the official company website using a third-party LinkedIn enrichment API
-3. Intelligently finds the most relevant career/jobs page on the company website
-4. Pulls one open position URL from the career page
-5. Returns everything in a clean, structured format
+1. Accepts a LinkedIn job listing URL or company page URL
+2. If given a job listing, it extracts the company name and LinkedIn company profile from the page
+3. Enriches the company to get the official website using a third-party LinkedIn API
+4. Intelligently finds the most relevant career/jobs page on the company website
+5. Extracts one open position URL from the career page
+6. Returns everything in a clean, structured format
 
 The agent includes fallback logic, domain validation, and scoring so it works reasonably well even on messy company sites.
 
@@ -34,7 +35,13 @@ cp .env.example .env
 
 ### Run It
 
-**Using LinkedIn (recommended):**
+**Using a LinkedIn job listing page (recommended):**
+
+```bash
+python main.py --linkedin-url "https://www.linkedin.com/jobs/view/1234567890" --mock
+```
+
+**Using a LinkedIn company page:**
 
 ```bash
 python main.py --linkedin-url "https://www.linkedin.com/company/stripe" --mock
@@ -50,11 +57,11 @@ python main.py --company-name "OpenAI" --company-url "https://openai.com"
 
 ## Key Features
 
-- Starts from LinkedIn (bypasses direct LinkedIn scraping issues)
-- Uses Apify for reliable company data extraction
+- Supports both **LinkedIn job listing pages** and company pages
+- Uses Apify for reliable company data extraction (avoids LinkedIn blocking)
 - Smart career page detection with scoring + validation
 - Common path fallbacks (`/careers`, `/jobs`, etc.)
-- Clean separation of concerns (crawler, validator, scoring, agent)
+- Clean separation of concerns
 - Full test suite (16 tests passing)
 - Mock mode for easy development and demo recording
 
@@ -62,7 +69,7 @@ python main.py --company-name "OpenAI" --company-url "https://openai.com"
 
 ```
 job-source-agent/
-├── main.py                 # CLI entrypoint
+├── main.py                 # CLI entrypoint + LinkedIn job/company handling
 ├── src/
 │   ├── agent.py            # Main orchestration logic
 │   ├── crawler.py          # Playwright-based link extraction
@@ -85,16 +92,17 @@ Currently **16/16 tests passing**.
 
 ## Why I Built It This Way
 
-- Used a third-party LinkedIn API instead of trying to scrape LinkedIn directly (more reliable + avoids blocks)
-- Kept the web crawling logic simple but added validation and scoring so it’s not too brittle
+- Used a third-party LinkedIn API instead of trying to scrape LinkedIn directly (more reliable)
+- Added proper validation and scoring instead of blindly taking the first link
+- Built in fallback logic for when career pages aren’t obviously linked
 - Added mock mode so I could develop and record demos without burning API credits
-- Wrote tests early so I could refactor confidently
+- Wrote tests so I could refactor confidently
 
 ## Future Improvements (If I Had More Time)
 
 - Add LLM-based link ranking instead of pure keyword scoring
-- Support more LinkedIn input types (job listing pages directly)
-- Better error messages and retry logic on flaky company sites
+- Improve company extraction from job listing pages (better selectors / handling of different LinkedIn layouts)
+- Add better error messages and retry logic
 
 ---
 
