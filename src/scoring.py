@@ -1,3 +1,5 @@
+import re
+
 CAREER_KEYWORDS = [
     "careers",
     "career",
@@ -20,6 +22,12 @@ JOB_KEYWORDS = [
     "position",
 ]
 
+import re
+
+
+def keyword_matches(keyword: str, text: str) -> bool:
+    pattern = r"\b" + re.escape(keyword) + r"\b"
+    return re.search(pattern, text) is not None
 
 def score_career_link(url: str, text: str) -> tuple[int, list[str]]:
     score = 0
@@ -28,7 +36,7 @@ def score_career_link(url: str, text: str) -> tuple[int, list[str]]:
     combined = f"{url} {text}".lower()
 
     for keyword in CAREER_KEYWORDS:
-        if keyword in combined:
+        if keyword_matches(keyword, combined):
             score += 5
             evidence.append(f"Matched career keyword: {keyword}")
 
@@ -42,7 +50,7 @@ def score_job_link(url: str, text: str) -> tuple[int, list[str]]:
     combined = f"{url} {text}".lower()
 
     for keyword in JOB_KEYWORDS:
-        if keyword in combined:
+        if keyword_matches(keyword, combined):
             score += 3
             evidence.append(f"Matched job keyword: {keyword}")
 
