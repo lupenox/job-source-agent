@@ -13,7 +13,6 @@ KNOWN_ATS_DOMAINS = [
     "jobvite.com",
 ]
 
-
 BLOCKED_JOB_BOARD_DOMAINS = [
     "linkedin.com",
     "indeed.com",
@@ -74,10 +73,6 @@ def validate_job_url(
     company_name: str,
     company_website_url: str,
 ) -> ValidationResult:
-    """
-    Job URLs are valid if they are either:
-    1. on the company domain, or
-    2. on a known ATS domain and company-specific.
     """
     url_lower = url.lower()
     candidate_domain = get_domain(url)

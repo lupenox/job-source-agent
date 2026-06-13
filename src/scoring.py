@@ -22,12 +22,11 @@ JOB_KEYWORDS = [
     "position",
 ]
 
-import re
-
 
 def keyword_matches(keyword: str, text: str) -> bool:
     pattern = r"\b" + re.escape(keyword) + r"\b"
-    return re.search(pattern, text) is not None
+    return re.search(pattern, text, re.IGNORECASE) is not None
+
 
 def score_career_link(url: str, text: str) -> tuple[int, list[str]]:
     score = 0

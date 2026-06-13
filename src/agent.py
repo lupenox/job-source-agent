@@ -30,13 +30,17 @@ class JobSourceAgent:
         career_page = await self._find_career_page(company_website_url)
 
         if career_page is None:
+            # Fallback: try common career paths directly
+            career_page = await self._try_common_career_paths(company_website_url)
+
+        if career_page is None:
             return JobSourceResult(
                 company_name=company_name,
                 company_website_url=company_website_url,
                 career_page_url=None,
                 open_position_url=None,
                 confidence=0.0,
-                evidence=["No valid career page found."],
+                evidence=["No valid career page found even with common path fallbacks."],
                 status=AgentStatus.NEEDS_REVIEW,
             )
 
@@ -52,8 +56,8 @@ class JobSourceAgent:
                 company_website_url=company_website_url,
                 career_page_url=career_page.url,
                 open_position_url=None,
-                confidence=0.5,
-                evidence=career_page.evidence + ["No valid open position URL found."],
+                confidence=0.6,
+                evidence=career_page.evidence + ["No valid open position URL found on career page."],
                 status=AgentStatus.NEEDS_REVIEW,
             )
 
@@ -96,6 +100,27 @@ class JobSourceAgent:
 
         candidates.sort(key=lambda candidate: candidate.score, reverse=True)
         return candidates[0]
+
+    async def _try_common_career_paths(self, company_website_url: str) -> CandidateLink | None:
+        """Fallback when link crawling misses the careers page."""
+        common_paths = [
+            "/careers", "/jobs", "/careers/", "/jobs/", "/about/careers",
+            "/company/careers", "/join-us", "/hiring",
+        ]
+        base = company_website_url.rstrip("/")
+
+        for path in common_paths:
+            candidate_url = base + path
+            # Quick validation
+            validation = validate_career_page(candidate_url, company_website_url)
+            if validation.is_valid:
+                return CandidateLink(
+                    url=candidate_url,
+                    text=f"Common career path: {path}",
+                    score=10,
+                    evidence=["Fallback common career path"],
+                )
+        return None
 
     async def _find_open_position(
         self,
