@@ -58,3 +58,9 @@ class JobSourceResult:
     confidence: float
     evidence: list[str] = field(default_factory=list)
     status: AgentStatus = AgentStatus.NEEDS_REVIEW
+
+    def to_challenge_format(self) -> str:
+        """Return exactly in the format requested by the take-home challenge."""
+        career = self.career_page_url or "N/A"
+        job = self.open_position_url or "N/A"
+        return f"{self.company_name},{career},{job}"
