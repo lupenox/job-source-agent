@@ -1,7 +1,25 @@
+import asyncio
 from src.crawler import WebCrawler
 from src.schemas import AgentStatus, CandidateLink, JobSourceResult
 from src.scoring import score_career_link, score_job_link
 from src.validator import validate_career_page, validate_job_url
+
+
+def _retry_async(max_attempts: int = 3, delay: float = 1.0):
+    """Simple retry decorator for async functions (no extra deps)."""
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            last_exc = None
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    last_exc = e
+                    if attempt < max_attempts:
+                        await asyncio.sleep(delay * attempt)
+            raise last_exc
+        return wrapper
+    return decorator
 
 
 class JobSourceAgent:
@@ -61,7 +79,7 @@ class JobSourceAgent:
                 status=AgentStatus.NEEDS_REVIEW,
             )
 
-        return JobSourceResult(
+        result = JobSourceResult(
             company_name=company_name,
             company_website_url=company_website_url,
             career_page_url=career_page.url,
@@ -70,7 +88,11 @@ class JobSourceAgent:
             evidence=career_page.evidence + job_url.evidence,
             status=AgentStatus.SUCCESS,
         )
+        # Add the exact challenge format for convenience
+        result.evidence.append(f"Challenge format: {result.to_challenge_format()}")
+        return result
 
+    @_retry_async(max_attempts=3, delay=0.8)
     async def _find_career_page(self, company_website_url: str) -> CandidateLink | None:
         links = await self.crawler.get_links(company_website_url)
         candidates: list[CandidateLink] = []
@@ -122,6 +144,7 @@ class JobSourceAgent:
                 )
         return None
 
+    @_retry_async(max_attempts=3, delay=0.8)
     async def _find_open_position(
         self,
         career_page_url: str,
