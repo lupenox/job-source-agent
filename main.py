@@ -74,6 +74,11 @@ async def main():
         help="Force mock mode for LinkedIn (no API credits used)"
     )
     parser.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="Disable LLM reranking (use only keyword scoring for career pages)"
+    )
+    parser.add_argument(
         "--output-format",
         choices=["json", "csv"],
         default="json",
@@ -96,10 +101,8 @@ async def main():
                 print(json.dumps(job_result, indent=2))
                 return
 
-            # Enrich the company using the extracted LinkedIn company URL
             linkedin_result = linkedin_api.fetch_company_info(job_result["company_linkedin_url"])
         else:
-            # Normal company page flow
             linkedin_result = linkedin_api.fetch_company_info(args.linkedin_url)
 
         if linkedin_result.status not in ("success", "success_mock"):
@@ -115,14 +118,19 @@ async def main():
         company_name = args.company_name
         company_website_url = args.company_url
 
-    # Run the core web agent
-    agent = JobSourceAgent()
+    # Create agent with optional LLM reranker
+    use_llm = not args.no_llm
+    if use_llm:
+        logger.info("LLM reranking enabled (Gemini)")
+    else:
+        logger.info("LLM reranking disabled - using keyword scoring only")
+
+    agent = JobSourceAgent(use_llm_reranker=use_llm)
     result = await agent.find_job_source(
         company_name=company_name,
         company_website_url=company_website_url,
     )
 
-    # Print in the exact format requested by the challenge
     print("\n" + "=" * 70)
     print("AI JOB SOURCE AGENT - FINAL RESULT (Challenge Format)")
     print("=" * 70)
