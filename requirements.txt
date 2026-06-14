@@ -2,6 +2,7 @@ playwright
 beautifulsoup4
 python-dotenv
 pydantic
+google-generativeai
 requests
 apify-client
 pytest
