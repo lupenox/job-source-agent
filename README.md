@@ -7,13 +7,19 @@ The goal was to build an agent that can start from a **LinkedIn job listing page
 ## What It Does
 
 1. Accepts a LinkedIn job listing URL or company page URL
-2. If given a job listing, it extracts the company name and LinkedIn company profile from the page
-3. Enriches the company to get the official website using a third-party LinkedIn API
-4. Intelligently finds the most relevant career/jobs page on the company website
-5. Extracts one open position URL from the career page
-6. Returns everything in a clean, structured format
+2. Extracts company name + official website (via Apify)
+3. **Intelligently finds the best career page** using keyword scoring + **LLM reranking (Gemini)**
+4. Extracts one open position URL from the career page
+5. Returns everything cleanly (including exact challenge format string)
 
-The agent includes fallback logic, domain validation, and scoring so it works reasonably well even on messy company sites.
+The agent includes retry logic, domain validation, scoring, common-path fallbacks, and graceful LLM fallback.
+
+## LLM-Powered Career Page Ranking (New!)
+
+When you provide a `GEMINI_API_KEY`, the agent uses **Gemini 1.5 Flash** to rerank the top keyword candidates and pick the single best careers page. This dramatically improves accuracy on companies with non-obvious career page links.
+
+- Falls back gracefully to keyword scoring if no key or LLM fails
+- You can disable it with `use_llm_reranker=False`
 
 ## Quick Start
 
@@ -27,83 +33,67 @@ playwright install chromium
 cp .env.example .env
 ```
 
-### Get an Apify Token (Recommended)
+### Required API Keys
 
-1. Sign up at [apify.com](https://apify.com) (free tier is enough)
-2. Go to Settings → API tokens and create one
-3. Add it to your `.env` file as `APIFY_API_TOKEN=...`
+1. **Apify** (for LinkedIn data)
+   - Sign up at [apify.com](https://apify.com)
+   - Add `APIFY_API_TOKEN` to `.env`
+
+2. **Gemini** (recommended for best career page accuracy)
+   - Get a free key at [aistudio.google.com](https://aistudio.google.com/app/apikey)
+   - Add `GEMINI_API_KEY` to `.env`
 
 ### Run It
 
-**Using a LinkedIn job listing page (recommended):**
+```bash
+python main.py --linkedin-url "https://www.linkedin.com/jobs/view/1234567890"
+```
 
+With mock mode (no API calls):
 ```bash
 python main.py --linkedin-url "https://www.linkedin.com/jobs/view/1234567890" --mock
 ```
 
-**Using a LinkedIn company page:**
-
-```bash
-python main.py --linkedin-url "https://www.linkedin.com/company/stripe" --mock
-```
-
-Remove `--mock` once you have a real token.
-
-**Direct mode (for testing):**
-
-```bash
-python main.py --company-name "OpenAI" --company-url "https://openai.com"
-```
-
 ## Key Features
 
-- Supports both **LinkedIn job listing pages** and company pages
-- Uses Apify for reliable company data extraction (avoids LinkedIn blocking)
-- Smart career page detection with scoring + validation
-- Common path fallbacks (`/careers`, `/jobs`, etc.)
-- Clean separation of concerns
-- Full test suite (16 tests passing)
-- Mock mode for easy development and demo recording
+- Supports both LinkedIn job listings and company pages
+- Apify for reliable LinkedIn data (no direct scraping)
+- **Keyword scoring + Gemini LLM reranking** for career page detection
+- Retry logic on network calls
+- Exact challenge output format via `result.to_challenge_format()`
+- Full test suite + mock mode
+- Clean, modular, production-minded code
 
 ## Project Structure
 
 ```
 job-source-agent/
-├── main.py                 # CLI entrypoint + LinkedIn job/company handling
+├── main.py
 ├── src/
-│   ├── agent.py            # Main orchestration logic
-│   ├── crawler.py          # Playwright-based link extraction
-│   ├── linkedin_parser.py  # Apify integration + mock mode
-│   ├── validator.py        # Domain & ATS validation
-│   ├── scoring.py          # Keyword-based link scoring
-│   ├── schemas.py          # Data models
-└── tests/                  # Pytest suite (16 tests)
+│   ├── agent.py            # Main orchestration + LLM reranker
+│   ├── crawler.py
+│   ├── linkedin_parser.py
+│   ├── validator.py
+│   ├── scoring.py
+│   ├── schemas.py
+└── tests/
 ```
 
 ## Testing
-
-All core logic is covered by tests:
 
 ```bash
 pytest tests/ -v
 ```
 
-Currently **16/16 tests passing**.
+All tests still pass.
 
-## Why I Built It This Way
+## Why This Architecture
 
-- Used a third-party LinkedIn API instead of trying to scrape LinkedIn directly (more reliable)
-- Added proper validation and scoring instead of blindly taking the first link
-- Built in fallback logic for when career pages aren’t obviously linked
-- Added mock mode so I could develop and record demos without burning API credits
-- Wrote tests so I could refactor confidently
-
-## Future Improvements (If I Had More Time)
-
-- Add LLM-based link ranking instead of pure keyword scoring
-- Improve company extraction from job listing pages (better selectors / handling of different LinkedIn layouts)
-- Add better error messages and retry logic
+- Third-party API (Apify) instead of fragile LinkedIn scraping
+- Hybrid keyword + LLM approach = fast + smart
+- Built-in retries and fallbacks for reliability
+- Easy to extend or integrate into larger agent systems
 
 ---
 
-Thanks for checking it out! This was a fun challenge and I learned a lot building it.
+Thanks for checking it out!
