@@ -3,7 +3,6 @@ import asyncio
 import json
 import logging
 from dataclasses import asdict
-from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -18,16 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 def is_linkedin_job_url(url: str) -> bool:
-    """Check if the URL looks like a LinkedIn job listing page."""
     lowered = url.lower()
     return "linkedin.com/jobs" in lowered
 
 
 async def extract_company_from_linkedin_job_page(job_url: str) -> dict:
-    """
-    Try to extract company name and LinkedIn company URL from a job listing page.
-    Returns a dict with company_name and company_linkedin_url if successful.
-    """
     crawler = WebCrawler()
     links = await crawler.get_links(job_url)
 
@@ -50,40 +44,17 @@ async def extract_company_from_linkedin_job_page(job_url: str) -> dict:
 
 async def main():
     parser = argparse.ArgumentParser(
-        description="AI Job Source Agent - Part 2 Take-Home Challenge\n"
-                    "Supports LinkedIn job listing pages and company pages"
+        description="AI Job Source Agent - Part 2 Take-Home Challenge"
     )
 
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument(
-        "--linkedin-url",
-        help="LinkedIn job listing or company page URL"
-    )
-    group.add_argument(
-        "--company-name",
-        help="Company name (use together with --company-url)"
-    )
+    group.add_argument("--linkedin-url", help="LinkedIn job listing or company page URL")
+    group.add_argument("--company-name", help="Company name (use with --company-url)")
 
-    parser.add_argument(
-        "--company-url",
-        help="Official company website (required if using --company-name)"
-    )
-    parser.add_argument(
-        "--mock",
-        action="store_true",
-        help="Force mock mode for LinkedIn (no API credits used)"
-    )
-    parser.add_argument(
-        "--no-llm",
-        action="store_true",
-        help="Disable LLM reranking (use only keyword scoring for career pages)"
-    )
-    parser.add_argument(
-        "--output-format",
-        choices=["json", "csv"],
-        default="json",
-        help="Output format (default: json)"
-    )
+    parser.add_argument("--company-url", help="Official company website")
+    parser.add_argument("--mock", action="store_true", help="Use mock mode (no API calls)")
+    parser.add_argument("--no-llm", action="store_true", help="Disable LLM reranking")
+    parser.add_argument("--output-format", choices=["json", "text"], default="text", help="Output format")
 
     args = parser.parse_args()
 
@@ -93,12 +64,11 @@ async def main():
         logger.info(f"Starting from LinkedIn URL: {args.linkedin_url}")
 
         if is_linkedin_job_url(args.linkedin_url):
-            logger.info("Detected LinkedIn job listing page. Extracting company info...")
+            logger.info("Detected LinkedIn job listing page")
             job_result = await extract_company_from_linkedin_job_page(args.linkedin_url)
 
-            if job_result.get("status") != "success" or not job_result.get("company_linkedin_url"):
+            if job_result.get("status") != "success":
                 print("Failed to extract company from job listing page.")
-                print(json.dumps(job_result, indent=2))
                 return
 
             linkedin_result = linkedin_api.fetch_company_info(job_result["company_linkedin_url"])
@@ -111,39 +81,33 @@ async def main():
 
         company_name = linkedin_result.company_name
         company_website_url = linkedin_result.company_website_url
-        logger.info(f"LinkedIn resolved \u2192 {company_name} | {company_website_url}")
     else:
         if not args.company_url:
             parser.error("--company-url is required when using --company-name")
         company_name = args.company_name
         company_website_url = args.company_url
 
-    # Create agent with optional LLM reranker
     use_llm = not args.no_llm
-    if use_llm:
-        logger.info("LLM reranking enabled (Gemini)")
-    else:
-        logger.info("LLM reranking disabled - using keyword scoring only")
-
     agent = JobSourceAgent(use_llm_reranker=use_llm)
-    result = await agent.find_job_source(
-        company_name=company_name,
-        company_website_url=company_website_url,
-    )
+    result = await agent.find_job_source(company_name, company_website_url)
 
-    print("\n" + "=" * 70)
-    print("AI JOB SOURCE AGENT - FINAL RESULT (Challenge Format)")
-    print("=" * 70)
+    # Clean demo-friendly output
+    print("\n" + "=" * 75)
+    print("AI JOB SOURCE AGENT - FINAL RESULT")
+    print("=" * 75)
     print(f"Company Name       : {result.company_name}")
+    print(f"Company Website    : {result.company_website_url}")
     print(f"Career Page URL    : {result.career_page_url or 'NOT FOUND'}")
     print(f"Open Position URL  : {result.open_position_url or 'NOT FOUND'}")
-    print("=" * 70)
+    print(f"Status             : {result.status.value}")
+    print(f"Confidence         : {result.confidence}")
+    print("=" * 75)
 
     if args.output_format == "json":
-        print("\nFull structured result:")
+        print("\nFull JSON:")
         print(json.dumps(asdict(result), indent=2))
     else:
-        print(f"\n{result.company_name},{result.career_page_url or ''},{result.open_position_url or ''}")
+        print(f"\nChallenge Format : {result.to_challenge_format()}")
 
 
 if __name__ == "__main__":
