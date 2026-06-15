@@ -60,10 +60,11 @@ class JobSourceAgent:
         company_name: str,
         company_website_url: str,
     ) -> JobSourceResult:
-        career_page = await self._find_career_page(company_name, company_website_url)
+        # First try direct common career paths (highest priority)
+        career_page = await self._try_common_career_paths(company_website_url)
 
         if career_page is None:
-            career_page = await self._try_common_career_paths(company_website_url)
+            career_page = await self._find_career_page(company_name, company_website_url)
 
         if career_page is None:
             return JobSourceResult(
@@ -72,7 +73,7 @@ class JobSourceAgent:
                 career_page_url=None,
                 open_position_url=None,
                 confidence=0.0,
-                evidence=["No valid career page found even with common path fallbacks."],
+                evidence=["No valid career page found."],
                 status=AgentStatus.NEEDS_REVIEW,
             )
 
@@ -210,8 +211,8 @@ Strict rules:
                 return CandidateLink(
                     url=candidate_url,
                     text=f"Common career path: {path}",
-                    score=15,
-                    evidence=["Strong fallback: exact common career path"],
+                    score=20,  # High priority
+                    evidence=["Direct common career path check"],
                 )
         return None
 
@@ -223,7 +224,6 @@ Strict rules:
     ) -> Optional[CandidateLink]:
         links = await self.crawler.get_links(career_page_url)
 
-        # Try to find a dedicated job search page first
         search_page_links = [
             link for link in links
             if self._looks_like_job_search_page(link["url"], link["text"])
@@ -255,7 +255,6 @@ Strict rules:
         candidates.sort(key=lambda c: c.score, reverse=True)
         top_candidates = candidates[:6]
 
-        # Use LLM to pick the best job if available
         if self._gemini_client and len(top_candidates) > 1:
             llm_choice = await self._llm_rerank_job_candidates(
                 company_name, career_page_url, top_candidates
