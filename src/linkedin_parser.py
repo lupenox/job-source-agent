@@ -39,7 +39,6 @@ class LinkedInCrawlerApi:
 
     def _mock_result(self, linkedin_url: str) -> LinkedInApiResult:
         """Safe mock for demo / testing the full pipeline without spending credits."""
-        # Common test companies
         if "stripe" in linkedin_url.lower():
             return LinkedInApiResult(
                 company_name="Stripe",
@@ -54,7 +53,6 @@ class LinkedInCrawlerApi:
                 status="success_mock",
                 reason="Mock data for OpenAI (demo mode)",
             )
-        # Generic fallback mock
         return LinkedInApiResult(
             company_name="Example Corp",
             company_website_url="https://example.com",
@@ -63,10 +61,6 @@ class LinkedInCrawlerApi:
         )
 
     def fetch_company_info(self, linkedin_url: str) -> LinkedInApiResult:
-        """
-        Extract company name + official website from a LinkedIn company page.
-        Input example: https://www.linkedin.com/company/stripe
-        """
         if self.use_mock:
             logger.info("Using MOCK mode for LinkedIn (no API token or use_mock=True)")
             return self._mock_result(linkedin_url)
@@ -82,14 +76,16 @@ class LinkedInCrawlerApi:
 
             run_input = {
                 "companyUrls": [linkedin_url],
-                "extractEmployees": False,      # keep cost low for demo
+                "extractEmployees": False,
                 "enableAiEnrichment": False,
             }
 
             logger.info(f"Calling Apify actor {self.actor_id} for {linkedin_url}")
             run = client.actor(self.actor_id).call(run_input=run_input)
 
-            items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
+            # Fixed: Use attribute access instead of dict subscript
+            dataset_id = run.default_dataset_id
+            items = list(client.dataset(dataset_id).iterate_items())
 
             if not items:
                 return LinkedInApiResult(
@@ -121,9 +117,3 @@ class LinkedInCrawlerApi:
                 status="failed",
                 reason=f"Apify error: {str(e)}",
             )
-
-
-# Backwards-compatible alias (old method name used in early scaffolding)
-class LinkedInCrawlerApiOld(LinkedInCrawlerApi):
-    def fetch_job_info(self, linkedin_url: str) -> LinkedInApiResult:
-        return self.fetch_company_info(linkedin_url)
