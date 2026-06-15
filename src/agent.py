@@ -2,13 +2,17 @@ import asyncio
 import os
 from typing import Optional
 
-import google.generativeai as genai
 from dotenv import load_dotenv
+from google import genai
+
+load_dotenv()
+
 
 from src.crawler import WebCrawler
 from src.schemas import AgentStatus, CandidateLink, JobSourceResult
 from src.scoring import score_career_link, score_job_link
 from src.validator import validate_career_page, validate_job_url
+
 
 load_dotenv()
 
@@ -34,15 +38,14 @@ class JobSourceAgent:
     def __init__(self, use_llm_reranker: bool = True):
         self.crawler = WebCrawler()
         self.use_llm_reranker = use_llm_reranker
-        self._gemini_model = None
+        self._gemini_client = None
 
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key and use_llm_reranker:
             try:
-                genai.configure(api_key=api_key)
-                self._gemini_model = genai.GenerativeModel("gemini-1.5-flash")
+                self._gemini_client = genai.Client(api_key=api_key)
             except Exception:
-                self._gemini_model = None  # graceful fallback
+                self._gemini_client = None  # graceful fallback
 
     def _looks_like_job_search_page(self, url: str, text: str) -> bool:
         combined = f"{url} {text}".lower()
@@ -95,7 +98,7 @@ class JobSourceAgent:
             company_website_url=company_website_url,
             career_page_url=career_page.url,
             open_position_url=job_url.url,
-            confidence=0.95 if self._gemini_model else 0.9,
+            confidence=0.95 if self._gemini_client else 0.9,
             evidence=career_page.evidence + job_url.evidence,
             status=AgentStatus.SUCCESS,
         )
@@ -130,7 +133,7 @@ class JobSourceAgent:
         top_candidates = candidates[:6]  # limit for LLM cost
 
         # LLM reranking (if available)
-        if self._gemini_model and len(top_candidates) > 1:
+        if self._gemini_client and len(top_candidates) > 1:
             llm_choice = await self._llm_rerank_career_candidates(
                 company_name, company_website_url, top_candidates
             )
@@ -147,7 +150,7 @@ class JobSourceAgent:
         candidates: list[CandidateLink],
     ) -> Optional[CandidateLink]:
         """Use Gemini to pick the single best career page from keyword-filtered candidates."""
-        if not self._gemini_model:
+        if not self._gemini_client:
             return None
 
         prompt = f"""You are an expert recruiter agent helping find the official careers page for {company_name}.
@@ -161,19 +164,21 @@ Here are the top candidate links found on the homepage (with their link text):
 
         prompt += """Return ONLY a JSON object with this exact structure:
 {
-  "best_url": "the single best career/jobs page URL from the list above",
-  "reason": "short explanation why this is the best one (1 sentence)"
+  \"best_url\": \"the single best career/jobs page URL from the list above\",
+  \"reason\": \"short explanation why this is the best one (1 sentence)\" 
 }
 
 Rules:
 - Only choose from the URLs provided above.
-- Prefer official careers, jobs, or "join us" pages over generic pages.
+- Prefer official careers, jobs, or \"join us\" pages over generic pages.
 - If none look like a real careers page, return the most relevant one anyway.
 - Do not make up URLs."""
 
         try:
             response = await asyncio.to_thread(
-                self._gemini_model.generate_content, prompt
+                self._gemini_client.models.generate_content,
+                model="gemini-1.5-flash",
+                contents=prompt
             )
             text = response.text.strip()
 
