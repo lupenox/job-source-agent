@@ -32,32 +32,42 @@ class LinkedInCrawlerApi:
     def __init__(self, use_mock: bool = False):
         self.apify_token = os.getenv("APIFY_API_TOKEN")
         self.use_mock = use_mock or not self.apify_token
-        self.actor_id = "zhorex/linkedin-company-enrichment"  # Excellent no-login actor
+        self.actor_id = "zhorex/linkedin-company-enrichment"
 
     def is_configured(self) -> bool:
         return bool(self.apify_token) and not self.use_mock
 
     def _mock_result(self, linkedin_url: str) -> LinkedInApiResult:
         """Safe mock for demo / testing the full pipeline without spending credits."""
-        if "stripe" in linkedin_url.lower():
+        url_lower = linkedin_url.lower()
+
+        if "stripe" in url_lower:
             return LinkedInApiResult(
                 company_name="Stripe",
                 company_website_url="https://stripe.com",
                 status="success_mock",
-                reason="Mock data for Stripe (demo mode)",
+                reason="Mock data for Stripe",
             )
-        if "openai" in linkedin_url.lower():
+        if "vercel" in url_lower:
+            return LinkedInApiResult(
+                company_name="Vercel",
+                company_website_url="https://vercel.com",
+                status="success_mock",
+                reason="Mock data for Vercel",
+            )
+        if "openai" in url_lower:
             return LinkedInApiResult(
                 company_name="OpenAI",
                 company_website_url="https://openai.com",
                 status="success_mock",
-                reason="Mock data for OpenAI (demo mode)",
+                reason="Mock data for OpenAI",
             )
+        # Generic fallback
         return LinkedInApiResult(
             company_name="Example Corp",
             company_website_url="https://example.com",
             status="success_mock",
-            reason="Generic mock data - replace with real LinkedIn URL + API token",
+            reason="Generic mock data",
         )
 
     def fetch_company_info(self, linkedin_url: str) -> LinkedInApiResult:
@@ -83,7 +93,6 @@ class LinkedInCrawlerApi:
             logger.info(f"Calling Apify actor {self.actor_id} for {linkedin_url}")
             run = client.actor(self.actor_id).call(run_input=run_input)
 
-            # Fixed: Use attribute access instead of dict subscript
             dataset_id = run.default_dataset_id
             items = list(client.dataset(dataset_id).iterate_items())
 
