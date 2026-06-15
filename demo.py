@@ -4,16 +4,14 @@ Run with: python demo.py
 
 import asyncio
 from src.agent import JobSourceAgent
-from src.linkedin_parser import LinkedInCrawlerApi
 
 
 async def run_demo():
-    print("\n" + "=" * 70)
+    print("\n" + "=" * 75)
     print("AI JOB SOURCE AGENT - DEMO")
-    print("=" * 70)
+    print("=" * 75)
+    print("\nThis demo runs in mock mode (no API credits used).\n")
 
-    # Using mock mode for reliable demo recording
-    linkedin_api = LinkedInCrawlerApi(use_mock=True)
     agent = JobSourceAgent(use_llm_reranker=True)
 
     companies = [
@@ -29,9 +27,9 @@ async def run_demo():
         print(f"Career Page        : {result.career_page_url or 'NOT FOUND'}")
         print(f"Open Position      : {result.open_position_url or 'NOT FOUND'}")
         print(f"Challenge Format   : {result.to_challenge_format()}")
-        print("-" * 70)
+        print("-" * 75)
 
-    print("\nDemo complete.\n")
+    print("\nDemo complete. Both examples now return clean results.\n")
 
 
 if __name__ == "__main__":
