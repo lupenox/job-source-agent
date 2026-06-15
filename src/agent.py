@@ -45,7 +45,7 @@ class JobSourceAgent:
             try:
                 self._gemini_client = genai.Client(api_key=api_key)
             except Exception:
-                self._gemini_client = None  # graceful fallback
+                self._gemini_client = None
 
     def _looks_like_job_search_page(self, url: str, text: str) -> bool:
         combined = f"{url} {text}".lower()
@@ -128,11 +128,10 @@ class JobSourceAgent:
         if not candidates:
             return None
 
-        # Sort by keyword score first
         candidates.sort(key=lambda c: c.score, reverse=True)
-        top_candidates = candidates[:6]  # limit for LLM cost
+        top_candidates = candidates[:8]  # increased from 6
 
-        # LLM reranking (if available)
+        # LLM reranking (stronger preference for real careers pages)
         if self._gemini_client and len(top_candidates) > 1:
             llm_choice = await self._llm_rerank_career_candidates(
                 company_name, company_website_url, top_candidates
@@ -140,7 +139,6 @@ class JobSourceAgent:
             if llm_choice:
                 return llm_choice
 
-        # Fallback to best keyword score
         return top_candidates[0]
 
     async def _llm_rerank_career_candidates(
@@ -149,30 +147,30 @@ class JobSourceAgent:
         company_website_url: str,
         candidates: list[CandidateLink],
     ) -> Optional[CandidateLink]:
-        """Use Gemini to pick the single best career page from keyword-filtered candidates."""
         if not self._gemini_client:
             return None
 
-        prompt = f"""You are an expert recruiter agent helping find the official careers page for {company_name}.
+        prompt = f"""You are a precise recruiter agent. Your job is to identify the SINGLE best official careers / jobs page for the company "{company_name}".
 
 Company website: {company_website_url}
 
-Here are the top candidate links found on the homepage (with their link text):
+Here are the candidate links scraped from the homepage:
 """
         for i, c in enumerate(candidates, 1):
-            prompt += f"{i}. URL: {c.url}\n   Text: {c.text or '(no text)'}\n\n"
+            prompt += f"{i}. {c.url}  |  Text: {c.text or '(no text)'}\n"
 
-        prompt += """Return ONLY a JSON object with this exact structure:
+        prompt += """
+Return ONLY valid JSON in this exact format:
 {
-  \"best_url\": \"the single best career/jobs page URL from the list above\",
-  \"reason\": \"short explanation why this is the best one (1 sentence)\" 
+  "best_url": "URL of the best careers page",
+  "reason": "One short sentence explaining why this is the best choice"
 }
 
-Rules:
-- Only choose from the URLs provided above.
-- Prefer official careers, jobs, or \"join us\" pages over generic pages.
-- If none look like a real careers page, return the most relevant one anyway.
-- Do not make up URLs."""
+Strict rules:
+- Strongly prefer URLs containing /careers, /jobs, /join, or /hiring
+- Strongly avoid /events, /blog, /news, /about, /pricing, /docs
+- If multiple good options exist, pick the most official-looking careers page
+- Only return a URL from the list above. Do not invent new URLs."""
 
         try:
             response = await asyncio.to_thread(
@@ -182,7 +180,6 @@ Rules:
             )
             text = response.text.strip()
 
-            # Simple JSON extraction
             import json
             if "```json" in text:
                 text = text.split("```json")[1].split("```")[0].strip()
@@ -192,21 +189,21 @@ Rules:
             data = json.loads(text)
             best_url = data.get("best_url")
 
-            # Find the matching candidate
             for c in candidates:
-                if c.url == best_url or c.url.rstrip("/") == best_url.rstrip("/"):
-                    c.evidence.append(f"LLM chosen: {data.get('reason', 'Best match')}")
+                if c.url.rstrip("/") == best_url.rstrip("/"):
+                    c.evidence.append(f"LLM selected: {data.get('reason', '')}")
                     return c
             return None
         except Exception:
-            return None  # graceful fallback to keyword winner
+            return None
 
     async def _try_common_career_paths(self, company_website_url: str) -> Optional[CandidateLink]:
         common_paths = [
             "/careers", "/jobs", "/careers/", "/jobs/", "/about/careers",
-            "/company/careers", "/join-us", "/hiring",
+            "/company/careers", "/join-us", "/hiring", "/join",
         ]
         base = company_website_url.rstrip("/")
+
         for path in common_paths:
             candidate_url = base + path
             validation = validate_career_page(candidate_url, company_website_url)
@@ -214,8 +211,8 @@ Rules:
                 return CandidateLink(
                     url=candidate_url,
                     text=f"Common career path: {path}",
-                    score=10,
-                    evidence=["Fallback common career path"],
+                    score=15,
+                    evidence=["Strong fallback: exact common career path"],
                 )
         return None
 
