@@ -129,9 +129,8 @@ class JobSourceAgent:
             return None
 
         candidates.sort(key=lambda c: c.score, reverse=True)
-        top_candidates = candidates[:8]  # increased from 6
+        top_candidates = candidates[:8]
 
-        # LLM reranking (stronger preference for real careers pages)
         if self._gemini_client and len(top_candidates) > 1:
             llm_choice = await self._llm_rerank_career_candidates(
                 company_name, company_website_url, top_candidates
@@ -216,7 +215,6 @@ Strict rules:
                 )
         return None
 
-    @_retry_async(max_attempts=3, delay=0.8)
     async def _find_open_position(
         self,
         career_page_url: str,
@@ -225,6 +223,7 @@ Strict rules:
     ) -> Optional[CandidateLink]:
         links = await self.crawler.get_links(career_page_url)
 
+        # Try to find a dedicated job search page first
         search_page_links = [
             link for link in links
             if self._looks_like_job_search_page(link["url"], link["text"])
@@ -254,4 +253,70 @@ Strict rules:
             return None
 
         candidates.sort(key=lambda c: c.score, reverse=True)
-        return candidates[0]
+        top_candidates = candidates[:6]
+
+        # Use LLM to pick the best job if available
+        if self._gemini_client and len(top_candidates) > 1:
+            llm_choice = await self._llm_rerank_job_candidates(
+                company_name, career_page_url, top_candidates
+            )
+            if llm_choice:
+                return llm_choice
+
+        return top_candidates[0]
+
+    async def _llm_rerank_job_candidates(
+        self,
+        company_name: str,
+        career_page_url: str,
+        candidates: list[CandidateLink],
+    ) -> Optional[CandidateLink]:
+        if not self._gemini_client:
+            return None
+
+        prompt = f"""You are selecting the SINGLE best open job position to show from {company_name}'s career page.
+
+Career page: {career_page_url}
+
+Here are the job links found:
+"""
+        for i, c in enumerate(candidates, 1):
+            prompt += f"{i}. {c.url}  |  Text: {c.text or '(no text)'}\n"
+
+        prompt += """
+Return ONLY valid JSON:
+{
+  "best_url": "the best job URL from the list",
+  "reason": "short reason why this job is a good example"
+}
+
+Rules:
+- Prefer engineering, product, design, or other technical roles if available
+- Avoid generic or unrelated links
+- Only choose from the URLs above"""
+
+        try:
+            response = await asyncio.to_thread(
+                self._gemini_client.models.generate_content,
+                model="gemini-1.5-flash",
+                contents=prompt
+            )
+            text = response.text.strip()
+
+            import json
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0].strip()
+            elif "```" in text:
+                text = text.split("```")[1].split("```")[0].strip()
+
+            data = json.loads(text)
+            best_url = data.get("best_url")
+
+            for c in candidates:
+                if c.url.rstrip("/") == best_url.rstrip("/"):
+                    c.evidence.append(f"LLM job pick: {data.get('reason', '')}")
+                    return c
+            return None
+        except Exception:
+            return None
+
