@@ -16,6 +16,11 @@ from src.validator import validate_career_page, validate_job_url
 
 load_dotenv()
 
+# Gemini 1.5 models have been shut down by Google. Google currently recommends
+# gemini-3.5-flash-lite / gemini-3.8-flash for new projects; the lighter model is
+# plenty for picking one URL from a short candidate list. Override with GEMINI_MODEL.
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
+
 
 def _retry_async(max_attempts: int = 3, delay: float = 1.0):
     """Simple retry decorator for async functions (no extra deps)."""
@@ -39,6 +44,7 @@ class JobSourceAgent:
         self.crawler = WebCrawler()
         self.use_llm_reranker = use_llm_reranker
         self._gemini_client = None
+        self.gemini_model = os.getenv("GEMINI_MODEL", "").strip() or DEFAULT_GEMINI_MODEL
 
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key and use_llm_reranker:
@@ -175,7 +181,7 @@ Strict rules:
         try:
             response = await asyncio.to_thread(
                 self._gemini_client.models.generate_content,
-                model="gemini-1.5-flash",
+                model=self.gemini_model,
                 contents=prompt
             )
             text = response.text.strip()
@@ -297,7 +303,7 @@ Rules:
         try:
             response = await asyncio.to_thread(
                 self._gemini_client.models.generate_content,
-                model="gemini-1.5-flash",
+                model=self.gemini_model,
                 contents=prompt
             )
             text = response.text.strip()

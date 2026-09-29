@@ -16,7 +16,7 @@ The agent includes retry logic, domain validation, scoring, common-path fallback
 
 ## LLM-Powered Career Page Ranking (New!)
 
-When you provide a `GEMINI_API_KEY`, the agent uses **Gemini 1.5 Flash** to rerank the top keyword candidates and pick the single best careers page. This dramatically improves accuracy on companies with non-obvious career page links.
+When you provide a `GEMINI_API_KEY`, the agent uses **Gemini** (default `gemini-3.5-flash-lite`, override with `GEMINI_MODEL`) to rerank the top keyword candidates and pick the single best careers page. This dramatically improves accuracy on companies with non-obvious career page links.
 
 - Falls back gracefully to keyword scoring if no key or LLM fails
 - You can disable it with `use_llm_reranker=False`
