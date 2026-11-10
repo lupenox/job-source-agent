@@ -1,5 +1,7 @@
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock
 
 from src.linkedin_parser import (
     LinkedInCrawlerApi,
@@ -42,6 +44,35 @@ def test_returns_not_configured_when_no_token():
     result = api.fetch_company_info("https://www.linkedin.com/company/stripe")
 
     assert result.status == "not_configured"
+
+
+def test_fetch_company_info_parses_top_level_fields_and_error_message():
+    api = LinkedInCrawlerApi(use_mock=False)
+    api.apify_token = "fake-token"
+    api.use_mock = False
+
+    mock_client = MagicMock()
+    mock_client.actor.return_value.call.return_value = SimpleNamespace(default_dataset_id="ds-1")
+    mock_client.dataset.return_value.iterate_items.return_value = [
+        {"name": "Stripe", "website": "stripe.com"}
+    ]
+
+    with patch("src.linkedin_parser.ApifyClient", return_value=mock_client):
+        result = api.fetch_company_info("https://www.linkedin.com/company/stripe")
+
+    assert result.status == "success"
+    assert result.company_name == "Stripe"
+    assert result.company_website_url == "https://stripe.com"
+    mock_client.actor.assert_called_once_with("johnvc/linkedin-company-api")
+
+    mock_client.dataset.return_value.iterate_items.return_value = [
+        {"error_message": "Company profile not found"}
+    ]
+    with patch("src.linkedin_parser.ApifyClient", return_value=mock_client):
+        err_result = api.fetch_company_info("https://www.linkedin.com/company/unknown")
+
+    assert err_result.status == "failed"
+    assert "Company profile not found" in (err_result.reason or "")
 
 
 def test_is_linkedin_job_url():

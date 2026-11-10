@@ -12,6 +12,8 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_APIFY_ACTOR_ID = "johnvc/linkedin-company-api"
+
 
 def is_linkedin_job_url(url: str) -> bool:
     """Return True if the URL points to a LinkedIn job posting rather than a company profile."""
@@ -57,7 +59,7 @@ class LinkedInCrawlerApi:
     """
     Adapter for extracting official company metadata (name + website URL) from LinkedIn.
 
-    Why use Apify (`zhorex/linkedin-company-enrichment`) instead of scraping LinkedIn directly?
+    Why use Apify (`johnvc/linkedin-company-api`) instead of scraping LinkedIn directly?
     LinkedIn aggressively blocks headless browsers and requires authenticated sessions for company
     "About" pages. Delegating LinkedIn enrichment to a managed actor isolates anti-bot maintenance
     from our core career-page discovery agent, while `use_mock=True` allows zero-cost local testing.
@@ -66,7 +68,7 @@ class LinkedInCrawlerApi:
     def __init__(self, use_mock: bool = False):
         self.apify_token = os.getenv("APIFY_API_TOKEN")
         self.use_mock = use_mock or not self.apify_token
-        self.actor_id = "zhorex/linkedin-company-enrichment"
+        self.actor_id = os.getenv("APIFY_ACTOR_ID", DEFAULT_APIFY_ACTOR_ID)
 
     def is_configured(self) -> bool:
         return bool(self.apify_token) and not self.use_mock
@@ -140,12 +142,7 @@ class LinkedInCrawlerApi:
 
         try:
             client = ApifyClient(self.apify_token)
-
-            run_input = {
-                "companyUrls": [linkedin_url],
-                "extractEmployees": False,
-                "enableAiEnrichment": False,
-            }
+            run_input = {"companyUrls": [linkedin_url]}
 
             logger.info("Calling Apify actor %s for %s", self.actor_id, linkedin_url)
             run = client.actor(self.actor_id).call(run_input=run_input)
@@ -159,9 +156,18 @@ class LinkedInCrawlerApi:
                     reason="Apify returned no results. Check the LinkedIn URL.",
                 )
 
-            company = items[0].get("company", {})
-            name = company.get("name")
-            website = company.get("website")
+            item = items[0]
+            if item.get("error_message"):
+                return LinkedInApiResult(
+                    status="failed",
+                    reason=f"Apify error: {item['error_message']}",
+                )
+
+            # Support both top-level fields (`johnvc/linkedin-company-api`)
+            # and nested `company` objects (`zhorex/linkedin-company-enrichment`).
+            company = item.get("company") if isinstance(item.get("company"), dict) else {}
+            name = item.get("name") or company.get("name")
+            website = item.get("website") or company.get("website")
 
             if not name or not website:
                 return LinkedInApiResult(
