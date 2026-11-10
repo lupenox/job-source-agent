@@ -87,7 +87,7 @@ pytest tests/ -v
 
 ### 3. Why Apify for LinkedIn Instead of Direct Scraping?
 - LinkedIn enforces strict anti-bot protections, authwalls, and IP rate limits on `/company/` pages. Building a brittle HTML scraper for LinkedIn couples the take-home challenge to anti-bot cat-and-mouse games.
-- Wrapping LinkedIn resolution behind `LinkedInCrawlerApi` (using Apify's `zhorex/linkedin-company-enrichment` actor + a deterministic `--mock` mode) follows the **Adapter Pattern**, keeping LinkedIn ingestion cleanly separated from the core web-crawling agent.
+- Wrapping LinkedIn resolution behind `LinkedInCrawlerApi` (using Apify's `johnvc/linkedin-company-api` actor + a deterministic `--mock` mode) follows the **Adapter Pattern**, keeping LinkedIn ingestion cleanly separated from the core web-crawling agent.
 
 ### 4. How Does URL Validation Prevent False Positives?
 - **Career Page Validation (`validate_career_page`)**: Requires the discovered career link to match the company's base domain (e.g., `careers.openai.com` or `stripe.com/jobs`), preventing social media or partner links in the footer from being mistaken for the company's career page.
