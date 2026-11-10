@@ -1,14 +1,48 @@
-import os
 import logging
+import os
 from dataclasses import dataclass
 from typing import Optional
 
 from apify_client import ApifyClient
 from dotenv import load_dotenv
 
+from src.crawler import WebCrawler
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+
+def is_linkedin_job_url(url: str) -> bool:
+    """Return True if the URL points to a LinkedIn job posting rather than a company profile."""
+    return "linkedin.com/jobs" in url.lower()
+
+
+async def extract_company_from_linkedin_job_page(
+    job_url: str,
+    crawler: Optional[WebCrawler] = None,
+) -> dict[str, str]:
+    """
+    Extract the company name and LinkedIn company profile URL from a public LinkedIn job page.
+    """
+    active_crawler = crawler or WebCrawler()
+    links = await active_crawler.get_links(job_url)
+
+    for link in links:
+        href = link.get("url", "")
+        text = link.get("text", "").strip()
+
+        if "linkedin.com/company/" in href and text:
+            return {
+                "company_name": text,
+                "company_linkedin_url": href,
+                "status": "success",
+            }
+
+    return {
+        "status": "failed",
+        "reason": "Could not find a LinkedIn company link on the job listing page.",
+    }
 
 
 @dataclass
@@ -21,12 +55,12 @@ class LinkedInApiResult:
 
 class LinkedInCrawlerApi:
     """
-    Production-ready adapter for LinkedIn company data extraction.
+    Adapter for extracting official company metadata (name + website URL) from LinkedIn.
 
-    Supports:
-    - Apify zhorex/linkedin-company-enrichment (recommended, no login needed)
-    - Mock mode for testing without API credits
-    - Easy to swap in Bright Data or other providers later
+    Why use Apify (`zhorex/linkedin-company-enrichment`) instead of scraping LinkedIn directly?
+    LinkedIn aggressively blocks headless browsers and requires authenticated sessions for company
+    "About" pages. Delegating LinkedIn enrichment to a managed actor isolates anti-bot maintenance
+    from our core career-page discovery agent, while `use_mock=True` allows zero-cost local testing.
     """
 
     def __init__(self, use_mock: bool = False):
@@ -37,11 +71,35 @@ class LinkedInCrawlerApi:
     def is_configured(self) -> bool:
         return bool(self.apify_token) and not self.use_mock
 
+    async def resolve_company(
+        self,
+        linkedin_url: str,
+        crawler: Optional[WebCrawler] = None,
+    ) -> LinkedInApiResult:
+        """
+        Resolve either a LinkedIn job listing URL or a LinkedIn company profile URL
+        into a `LinkedInApiResult` containing `company_name` and `company_website_url`.
+        """
+        if is_linkedin_job_url(linkedin_url):
+            logger.info("Detected LinkedIn job listing URL: %s", linkedin_url)
+            if self.use_mock:
+                return self._mock_result(linkedin_url)
+
+            job_result = await extract_company_from_linkedin_job_page(linkedin_url, crawler=crawler)
+            if job_result.get("status") != "success":
+                return LinkedInApiResult(
+                    status="failed",
+                    reason=job_result.get("reason", "Failed to extract company from job listing page."),
+                )
+            linkedin_url = job_result["company_linkedin_url"]
+
+        return self.fetch_company_info(linkedin_url)
+
     def _mock_result(self, linkedin_url: str) -> LinkedInApiResult:
-        """Safe mock for demo / testing the full pipeline without spending credits."""
+        """Deterministic mock responses for local testing and demos without spending API credits."""
         url_lower = linkedin_url.lower()
 
-        if "stripe" in url_lower:
+        if "stripe" in url_lower or "1234567890" in url_lower:
             return LinkedInApiResult(
                 company_name="Stripe",
                 company_website_url="https://stripe.com",
@@ -62,7 +120,6 @@ class LinkedInCrawlerApi:
                 status="success_mock",
                 reason="Mock data for OpenAI",
             )
-        # Generic fallback
         return LinkedInApiResult(
             company_name="Example Corp",
             company_website_url="https://example.com",
@@ -90,7 +147,7 @@ class LinkedInCrawlerApi:
                 "enableAiEnrichment": False,
             }
 
-            logger.info(f"Calling Apify actor {self.actor_id} for {linkedin_url}")
+            logger.info("Calling Apify actor %s for %s", self.actor_id, linkedin_url)
             run = client.actor(self.actor_id).call(run_input=run_input)
 
             dataset_id = run.default_dataset_id
@@ -102,9 +159,7 @@ class LinkedInCrawlerApi:
                     reason="Apify returned no results. Check the LinkedIn URL.",
                 )
 
-            item = items[0]
-            company = item.get("company", {})
-
+            company = items[0].get("company", {})
             name = company.get("name")
             website = company.get("website")
 
@@ -114,15 +169,16 @@ class LinkedInCrawlerApi:
                     reason="Apify response missing name or website field.",
                 )
 
+            normalized_website = website if website.startswith("http") else f"https://{website}"
             return LinkedInApiResult(
                 company_name=name,
-                company_website_url=website if website.startswith("http") else f"https://{website}",
+                company_website_url=normalized_website,
                 status="success",
             )
 
-        except Exception as e:
+        except Exception as exc:
             logger.exception("Apify call failed")
             return LinkedInApiResult(
                 status="failed",
-                reason=f"Apify error: {str(e)}",
+                reason=f"Apify error: {exc}",
             )

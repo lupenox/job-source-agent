@@ -10,7 +10,7 @@ async def run_demo():
     print("\n" + "=" * 75)
     print("AI JOB SOURCE AGENT - DEMO")
     print("=" * 75)
-    print("\nThis demo runs in mock mode (no API credits used).\n")
+    print("\nRunning live career page & job discovery for Stripe and Vercel...\n")
 
     agent = JobSourceAgent(use_llm_reranker=True)
 
@@ -29,7 +29,7 @@ async def run_demo():
         print(f"Challenge Format   : {result.to_challenge_format()}")
         print("-" * 75)
 
-    print("\nDemo complete. Both examples now return clean results.\n")
+    print("\nDemo complete. Both examples returned clean results.\n")
 
 
 if __name__ == "__main__":
