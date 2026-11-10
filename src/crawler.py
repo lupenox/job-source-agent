@@ -14,7 +14,7 @@ USER_AGENTS = [
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
 ]
 
-IGNORED_SCHEMES = ("javascript:", "mailto:", "tel:", "#")
+IGNORED_SCHEMES = ("javascript:", "mailto:", "tel:")
 
 
 def retry_async(max_attempts: int = 2, base_delay: float = 1.0):
@@ -120,7 +120,9 @@ class WebCrawler:
             href = (link.get("href") or "").strip()
             text = (link.get("text") or "").strip()
 
-            if not href or href.lower().startswith(IGNORED_SCHEMES):
+            # Ignore empty hrefs, bare '#' placeholders, and non-HTTP schemes,
+            # while preserving hash-routed SPA paths such as '#/careers'.
+            if not href or href == "#" or href.lower().startswith(IGNORED_SCHEMES):
                 continue
 
             absolute_url = urljoin(page_url, href)
